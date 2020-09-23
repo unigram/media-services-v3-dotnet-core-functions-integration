@@ -67,10 +67,24 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using advanced_vod_functions_v3.SharedLibs;
-
+using System.Collections.Generic;
 
 namespace advanced_vod_functions_v3
 {
+
+    public class UploadResponse {
+        public List<UploadResponseStrem> streamingPaths { get; set; }
+        public string fileName { get; set; }
+
+    }
+
+    public class UploadResponseStrem
+    {
+        public string StreamingProtocol { get; set; }
+        public string EncryptionScheme { get; set; }
+        public string StreamingUrl { get; set; }
+    }
+
     public static class UpdateAssetDB
     {
         [FunctionName("UpdateAssetDB")]
@@ -84,14 +98,19 @@ namespace advanced_vod_functions_v3
             {
 
                 string requestBody = new StreamReader(req.Body).ReadToEnd();
-                dynamic data = JsonConvert.DeserializeObject(requestBody);
+                UploadResponse data = JsonConvert.DeserializeObject<UploadResponse>(requestBody);
 
-                JArray streamingPaths = data.streamingPaths;
                 string fileName = data.fileName;
-                string streamUrl = data.streamingPath;
+                string streamUrl = "";
+
+                foreach (var stream in data.streamingPaths) {
+                    if (stream.StreamingProtocol == "Hls") {
+                        streamUrl = stream.StreamingUrl;
+                    }
+                }
+
 
                 JObject result = new JObject();
-                result["streamingPaths"] = streamingPaths;
                 result["fileName"] = fileName;
                 result["streamUrl"] = streamUrl;
                  return (ActionResult)new OkObjectResult(result);

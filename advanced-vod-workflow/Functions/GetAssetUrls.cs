@@ -40,7 +40,8 @@ Output:
                 "EncryptionScheme": "EnvelopeEncryption",
                 "StreamingUrl": "https://amsv3demo-jpea.streaming.media.azure.net/6c4bb037-6907-406d-8e4d-15f91e44ac08/Ignite-short.ism/manifest(encryption=cbc)"
             }
-        ]
+        ],
+"streamingPath":"sdfsdf"
     }
 
 ```
@@ -103,7 +104,6 @@ namespace advanced_vod_functions_v3
 
             JArray downloadPaths = new JArray();
             JArray streamingPaths = new JArray();
-            var streamingPath = "";
             try
             {
                 IAzureMediaServicesClient client = MediaServicesHelper.CreateMediaServicesClientAsync(amsconfig);
@@ -135,11 +135,8 @@ namespace advanced_vod_functions_v3
                         p["EncryptionScheme"] = path.EncryptionScheme.ToString();
                         p["StreamingUrl"] = uriBuilder.ToString();
                         streamingPaths.Add(p);
-
-                        if (path.StreamingProtocol.ToString() == "Hls") {
-                            streamingPath = uriBuilder.ToString();
-                        }
                     }
+
                 }
             }
             catch (ApiErrorException e)
@@ -156,7 +153,6 @@ namespace advanced_vod_functions_v3
             JObject result = new JObject();
             result["downloadPaths"] = downloadPaths;
             result["streamingPaths"] = streamingPaths;
-            result["stramingUrl"] = streamingPath;
             return (ActionResult)new OkObjectResult(result);
         }
     }
