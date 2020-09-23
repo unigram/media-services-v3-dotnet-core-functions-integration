@@ -297,8 +297,7 @@ namespace advanced_vod_functions_v3
             { "H264MultipleBitrateSD", EncoderNamedPreset.H264MultipleBitrateSD },
             { "H264SingleBitrate1080p", EncoderNamedPreset.H264SingleBitrate1080p },
             { "H264SingleBitrate720p", EncoderNamedPreset.H264SingleBitrate720p },
-            { "H264SingleBitrateSD", EncoderNamedPreset.H264SingleBitrateSD },
-            { "ContentAwareEncodingExperimental", EncoderNamedPreset.ContentAwareEncodingExperimental}
+            { "H264SingleBitrateSD", EncoderNamedPreset.H264SingleBitrateSD }
         };
     }
 }
