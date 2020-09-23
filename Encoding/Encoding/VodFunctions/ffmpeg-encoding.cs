@@ -41,7 +41,6 @@ using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Xabe.FFmpeg;
 
 namespace Encoding
 {
@@ -143,60 +142,55 @@ namespace Encoding
                     }
                 }
 
-                // log.LogInformation("Encoding...");
-                // var file = System.IO.Path.Combine(folder, "..\\ffmpeg\\ffmpeg.exe");
-                // log.LogInformation($"ffmeg Exists: {File.Exists(file)}");
+                log.LogInformation("Encoding...");
+                var file = System.IO.Path.Combine(folder, "..\\ffmpeg\\ffmpeg.exe");
+                log.LogInformation($"ffmeg Exists: {File.Exists(file)}");
 
-                // System.Diagnostics.Process process = new System.Diagnostics.Process();
-                // process.StartInfo.WorkingDirectory = tempFolder;
-                // process.StartInfo.FileName = file;
+                System.Diagnostics.Process process = new System.Diagnostics.Process();
+                process.StartInfo.WorkingDirectory = tempFolder;
+                process.StartInfo.FileName = file;
 
-                // log.LogInformation($"Temp In Exists: {File.Exists(pathLocalInput)}");
-
-
-                // process.StartInfo.Arguments = ("-i {input} -acodec copy -bsf:a aac_adtstoasc -vcodec copy {output}")
-                //     .Replace("{input}", "\"" + pathLocalInput + "\"")
-                //     .Replace("{output}", "\"" + pathLocalOutput + "\"")
-                //     .Replace("'", "\"");
-
-                // log.LogInformation(process.StartInfo.Arguments);
-                // process.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
-                // process.StartInfo.CreateNoWindow = true;
-                // process.StartInfo.UseShellExecute = false;
-                // process.StartInfo.RedirectStandardOutput = true;
-                // process.StartInfo.RedirectStandardError = true;
-                // var sb = new StringBuilder();
-                // process.OutputDataReceived += new DataReceivedEventHandler(
-                //     (s, e) =>
-                //     {
-                //         log.LogInformation("O: " + e.Data);
-                //     }
-                // );
-                //process.ErrorDataReceived += (s, a) => sb.AppendLine(a.Data);
-                //process.EnableRaisingEvents = true;
-
-                // //start process
-                // process.Start();
-                // log.LogInformation("process started");
-                // process.BeginOutputReadLine();
-                // process.BeginErrorReadLine();
-                // process.WaitForExit();
-                // if (process.ExitCode != 0)
-                // {
-                //     log.LogInformation(sb.ToString());
-                //     throw new InvalidOperationException($"Ffmpeg failed with exit code {process.ExitCode}");
-                // }
-
-                // exitCode = process.ExitCode;
-                // ffmpegResult = output;
+                log.LogInformation($"Temp In Exists: {File.Exists(pathLocalInput)}");
 
 
-                IMediaInfo mediaInfo = await FFmpeg.GetMediaInfo(pathLocalInput);
+                process.StartInfo.Arguments = ("-i {input} -acodec copy -bsf:a aac_adtstoasc -vcodec copy {output}")
+                    .Replace("{input}", "\"" + pathLocalInput + "\"")
+                    .Replace("{output}", "\"" + pathLocalOutput + "\"")
+                    .Replace("'", "\"");
 
-                IConversionResult result = await Conversion.ToMp4(pathLocalInput, pathLocalOutput).Start();
+                log.LogInformation(process.StartInfo.Arguments);
+                process.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
+                process.StartInfo.CreateNoWindow = true;
+                process.StartInfo.UseShellExecute = false;
+                process.StartInfo.RedirectStandardOutput = true;
+                process.StartInfo.RedirectStandardError = true;
+                var sb = new StringBuilder();
+                process.OutputDataReceived += new DataReceivedEventHandler(
+                    (s, e) =>
+                    {
+                        log.LogInformation("O: " + e.Data);
+                    }
+                );
+                process.ErrorDataReceived += (s, a) => sb.AppendLine(a.Data);
+                process.EnableRaisingEvents = true;
+
+                //start process
+                process.Start();
+                log.LogInformation("process started");
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+                process.WaitForExit();
+                if (process.ExitCode != 0)
+                {
+                    log.LogInformation(sb.ToString());
+                    throw new InvalidOperationException($"Ffmpeg failed with exit code {process.ExitCode}");
+                }
+
+                exitCode = process.ExitCode;
+                ffmpegResult = output;
 
 
-                log.LogInformation("Video Converted "+ mediaInfo.Duration);
+                log.LogInformation("Video Converted");
 
                 /* Uploads the encoded video file from local to blob. */
                 log.LogInformation("Uploading encoded file to blob");
