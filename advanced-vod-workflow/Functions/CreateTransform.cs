@@ -230,8 +230,6 @@ namespace advanced_vod_functions_v3
                             preset = new BuiltInStandardEncoderPreset(EncoderNamedPresetList[presetName]);
                         }
                         OnErrorType onError = OnErrorType.StopProcessingJob;
-                        if (data.onError != null && OnErrorTypeList.ContainsKey(data.onError))
-                            onError = OnErrorTypeList[data.onError];
                         Priority relativePriority = Priority.Normal;
                         if (data.relativePriority != null && PriorityList.ContainsKey(data.relativePriority))
                             relativePriority = PriorityList[data.relativePriority];
@@ -297,7 +295,8 @@ namespace advanced_vod_functions_v3
             { "H264MultipleBitrateSD", EncoderNamedPreset.H264MultipleBitrateSD },
             { "H264SingleBitrate1080p", EncoderNamedPreset.H264SingleBitrate1080p },
             { "H264SingleBitrate720p", EncoderNamedPreset.H264SingleBitrate720p },
-            { "H264SingleBitrateSD", EncoderNamedPreset.H264SingleBitrateSD }
+            { "H264SingleBitrateSD", EncoderNamedPreset.H264SingleBitrateSD },
+            { "ContentAwareEncodingExperimental", EncoderNamedPreset.ContentAwareEncodingExperimental }
         };
     }
 }
