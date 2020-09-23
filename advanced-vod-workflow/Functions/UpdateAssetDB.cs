@@ -80,26 +80,38 @@ namespace advanced_vod_functions_v3
         {
             log.LogInformation($"AMS v3 Function - Update Asset in DB was triggered!");
 
-            string requestBody = new StreamReader(req.Body).ReadToEnd();
-            dynamic data = JsonConvert.DeserializeObject(requestBody);
+            try
+            {
 
-            JArray streamingPaths = data.streamingPaths;
-            string fileName = data.fileName;
-            string streamUrl = "";
+                string requestBody = new StreamReader(req.Body).ReadToEnd();
+                dynamic data = JsonConvert.DeserializeObject(requestBody);
 
-            foreach (var path in streamingPaths) {
+                JArray streamingPaths = data.streamingPaths;
+                string fileName = data.fileName;
+                string streamUrl = "";
 
-                if (path["StreamingProtocol"].ToString() == "Hls") {
-                    streamUrl = path["StreamingUrl"].ToString();
+                foreach (var path in streamingPaths)
+                {
+
+                    if (path["StreamingProtocol"].ToString() == "Hls")
+                    {
+                        streamUrl = path["StreamingUrl"].ToString();
+                    }
                 }
+
+                JObject result = new JObject();
+                result["streamingPaths"] = streamingPaths;
+                result["fileName"] = fileName;
+                result["streamUrl"] = streamUrl;
+                 return (ActionResult)new OkObjectResult(result);
+            }
+            catch (Exception e)
+            {
+                log.LogInformation($"ERROR: Exception with message: {e.Message}");
+                return new BadRequestObjectResult("Error: " + e.Message);
             }
 
 
-            JObject result = new JObject();
-            result["streamingPaths"] = streamingPaths;
-            result["fileName"] = fileName;
-            result["streamUrl"] = streamUrl;
-            return (ActionResult)new OkObjectResult(result);
         }
     }
 }
