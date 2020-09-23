@@ -88,16 +88,7 @@ namespace advanced_vod_functions_v3
 
                 JArray streamingPaths = data.streamingPaths;
                 string fileName = data.fileName;
-                string streamUrl = "";
-
-                foreach (var path in streamingPaths)
-                {
-
-                    if (path["StreamingProtocol"].ToString() == "Hls")
-                    {
-                        streamUrl = path["StreamingUrl"].ToString();
-                    }
-                }
+                string streamUrl = data.streamingPath;
 
                 JObject result = new JObject();
                 result["streamingPaths"] = streamingPaths;

@@ -103,6 +103,7 @@ namespace advanced_vod_functions_v3
 
             JArray downloadPaths = new JArray();
             JArray streamingPaths = new JArray();
+            var streamingPath = "";
             try
             {
                 IAzureMediaServicesClient client = MediaServicesHelper.CreateMediaServicesClientAsync(amsconfig);
@@ -119,6 +120,7 @@ namespace advanced_vod_functions_v3
                     downloadPaths.Add(uriBuilder.ToString());
                 }
 
+  
                 foreach (var path in paths.StreamingPaths)
                 {
                     UriBuilder uriBuilder = new UriBuilder();
@@ -133,6 +135,10 @@ namespace advanced_vod_functions_v3
                         p["EncryptionScheme"] = path.EncryptionScheme.ToString();
                         p["StreamingUrl"] = uriBuilder.ToString();
                         streamingPaths.Add(p);
+
+                        if (path.StreamingProtocol.ToString() == "Hls") {
+                            streamingPath = uriBuilder.ToString();
+                        }
                     }
                 }
             }
@@ -150,6 +156,7 @@ namespace advanced_vod_functions_v3
             JObject result = new JObject();
             result["downloadPaths"] = downloadPaths;
             result["streamingPaths"] = streamingPaths;
+            result["stramingUrl"] = streamingPath;
             return (ActionResult)new OkObjectResult(result);
         }
     }
