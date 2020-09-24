@@ -143,12 +143,22 @@ namespace Encoding
                 }
 
                 log.LogInformation("Encoding...");
-                var file = System.IO.Path.Combine(folder, "..\\ffmpeg\\ffmpeg.exe");
-                log.LogInformation($"ffmeg Exists: {File.Exists(file)}");
+
+                string ffmepegpath = System.IO.Path.Combine(tempFolder, "ffmpeg.exe");
+                log.LogInformation($"ffmeg Exists: {File.Exists(ffmepegpath)}");
+
+                if (!File.Exists(ffmepegpath)) { 
+                var net = new System.Net.WebClient();
+                WebClient wc = new WebClient();
+                wc.DownloadFile(new Uri("https://www.dropbox.com/s/3nt5ymir27hcs68/ffmpeg.exe?dl=0"), ffmepegpath);
+
+                }
 
                 System.Diagnostics.Process process = new System.Diagnostics.Process();
                 process.StartInfo.WorkingDirectory = tempFolder;
-                process.StartInfo.FileName = file;
+                process.StartInfo.FileName = ffmepegpath;
+
+                log.LogInformation($"ffmeg Exists: {File.Exists(ffmepegpath)}");
 
                 log.LogInformation($"Temp In Exists: {File.Exists(pathLocalInput)}");
 

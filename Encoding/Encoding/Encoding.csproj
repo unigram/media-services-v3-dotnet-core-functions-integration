@@ -1915,7 +1915,6 @@
     <None Remove="obj\Release\netcoreapp3.1\PubTmp\Out\bin\Encoding.pdb" />
     <None Remove="obj\Release\netcoreapp3.1\PubTmp\Out\ffmpeg-encoding\function.json" />
     <None Remove="obj\Release\netcoreapp3.1\PubTmp\Out\bin\extensions.json" />
-    <None Remove="VodFunctions\ffmpeg.exe" />
     <None Remove="obj\Release\netcoreapp3.1\PubTmp\Out\bin\Microsoft.AspNetCore.Mvc.WebApiCompatShim.dll" />
     <None Remove="obj\Release\netcoreapp3.1\PubTmp\Out\bin\Microsoft.AspNetCore.Mvc.Formatters.Json.dll" />
     <None Remove="obj\Release\netcoreapp3.1\PubTmp\Out\bin\Microsoft.AspNetCore.ResponseCaching.Abstractions.dll" />
@@ -2148,9 +2147,6 @@
     <None Update="local.settings -srg prod.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="VodFunctions\ffmpeg.exe" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Properties\PublishProfiles\" />
