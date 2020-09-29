@@ -63,8 +63,164 @@ namespace Encoding
         }
 
         [FunctionName("ffmpeg-encoding")]
-        public static async Task<IActionResult> Run(
+        public static async Task<IActionResult> EncodeAgora(
             [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)]
+            HttpRequest req, ILogger log, ExecutionContext context)
+        {
+            string output = string.Empty;
+            bool isSuccessful = true;
+            dynamic ffmpegResult = new JObject();
+            string errorText = string.Empty;
+            int exitCode = 0;
+
+            log.LogInformation("C# HTTP trigger function processed a request.");
+
+            dynamic data;
+            try
+            {
+                    data = JsonConvert.DeserializeObject(new StreamReader(req.Body).ReadToEnd());
+            }
+            catch (Exception ex)
+            {
+                return Helpers.Helpers.ReturnErrorException(log, ex);
+            }
+
+            var inputFileName = (string)data.inputFileName;
+            var inputUrl = (string)data.inputFileUrl;
+
+            var outputAccount = (string)data.outputAccount;
+            var outputKey = (string)data.outputKey;
+
+        
+            StorageCredentials outputStorageCredentials = new StorageCredentials(outputAccount, outputKey);
+            CloudStorageAccount outputStorageAccount = new CloudStorageAccount(outputStorageCredentials, useHttps: true);
+
+            CloudBlobClient outputBlobClient = outputStorageAccount.CreateCloudBlobClient();
+            CloudBlobContainer outputContainer = outputBlobClient.GetContainerReference("vod-upload");
+
+            var shortName = inputFileName.Replace(".m3u8", "");
+
+            try
+            {
+                var folder = context.FunctionDirectory;
+                var tempFolder = Path.GetTempPath();
+
+                string outputFileName = shortName + ".mp4";
+                string pathLocalOutput = System.IO.Path.Combine(tempFolder, outputFileName);
+
+                foreach (DriveInfo drive in DriveInfo.GetDrives().Where(d => d.IsReady))
+                {
+                    log.LogInformation($"{drive.Name}: {drive.TotalFreeSpace / 1024 / 1024} MB");
+                }
+
+                log.LogInformation("Encoding...");
+                var file = System.IO.Path.Combine(folder, "..\\ffmpeg\\ffmpeg.exe");
+                log.LogInformation($"ffmeg Exists: {File.Exists(file)}");
+
+                System.Diagnostics.Process process = new System.Diagnostics.Process();
+                process.StartInfo.WorkingDirectory = tempFolder;
+                process.StartInfo.FileName = file;
+
+                process.StartInfo.Arguments = ("-i {input} -acodec copy -bsf:a aac_adtstoasc -vcodec copy {output}")
+                    .Replace("{input}", "\"" + inputUrl + "\"")
+                    .Replace("{output}", "\"" + pathLocalOutput + "\"")
+                    .Replace("'", "\"");
+
+                log.LogInformation(process.StartInfo.Arguments);
+                process.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
+                process.StartInfo.CreateNoWindow = true;
+                process.StartInfo.UseShellExecute = false;
+                process.StartInfo.RedirectStandardOutput = true;
+                process.StartInfo.RedirectStandardError = true;
+                var sb = new StringBuilder();
+                process.OutputDataReceived += new DataReceivedEventHandler(
+                    (s, e) =>
+                    {
+                        log.LogInformation("O: " + e.Data);
+                    }
+                );
+                process.ErrorDataReceived += (s, a) => sb.AppendLine(a.Data);
+                process.EnableRaisingEvents = true;
+
+                //start process
+                process.Start();
+                log.LogInformation("process started");
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+                process.WaitForExit();
+                if (process.ExitCode != 0)
+                {
+                    log.LogInformation(sb.ToString());
+                    throw new InvalidOperationException($"Ffmpeg failed with exit code {process.ExitCode}");
+                }
+
+                exitCode = process.ExitCode;
+                ffmpegResult = output;
+
+
+                log.LogInformation("Video Converted");
+
+                /* Uploads the encoded video file from local to blob. */
+                log.LogInformation("Uploading encoded file to blob");
+
+                log.LogInformation($"Temp Out Exists: {File.Exists(pathLocalOutput)}");
+
+                using (FileStream fs = System.IO.File.OpenRead(pathLocalOutput))
+                {
+                    try
+                    {
+                        var writeBlob = outputContainer.GetBlockBlobReference(outputFileName);
+                        await writeBlob.UploadFromStreamAsync(fs);
+                        log.LogInformation("Uploaded encoded file to blob");
+                    }
+                    catch (Exception ex)
+                    {
+                        log.LogInformation("There was a problem uploading converted file to blob. " + ex.ToString());
+                    }
+                }
+
+                var files = Directory.GetFiles(tempFolder, "*.*", SearchOption.AllDirectories);
+                foreach (var fll in files)
+                {
+                    if (File.Exists(fll))
+                    {
+                        File.Delete(fll);
+                    }
+                }
+
+                if (File.Exists(pathLocalOutput))
+                {
+                    File.Delete(pathLocalOutput);
+                }
+
+            }
+            catch (Exception e)
+            {
+                isSuccessful = false;
+                errorText += e.Message;
+            }
+
+            if (exitCode != 0)
+            {
+                isSuccessful = false;
+            }
+
+            var response = new JObject
+            {
+                {"isSuccessful", isSuccessful},
+                {"ffmpegResult",  ffmpegResult},
+                {"errorText", errorText }
+
+            };
+
+            return new OkObjectResult(
+                response
+            );
+        }
+
+        [FunctionName("ffmpeg-encoding-download")]
+        public static async Task<IActionResult> EncodeDownload(
+           [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)]
             HttpRequest req, ILogger log, ExecutionContext context)
         {
             string output = string.Empty;
@@ -90,6 +246,7 @@ namespace Encoding
             var storageKey = (string)data.storageKey;
             var outputAccount = (string)data.outputAccount;
             var outputKey = (string)data.outputKey;
+            var shortName = inputFileName.Replace(".mp4", "");
 
             StorageCredentials inpoutStorageCredentials = new StorageCredentials(storageAccount, storageKey);
             CloudStorageAccount inputStorageAccount = new CloudStorageAccount(inpoutStorageCredentials, useHttps: true);
@@ -98,72 +255,221 @@ namespace Encoding
             CloudStorageAccount outputStorageAccount = new CloudStorageAccount(outputStorageCredentials, useHttps: true);
 
             CloudBlobClient outputBlobClient = outputStorageAccount.CreateCloudBlobClient();
-            CloudBlobContainer outputContainer = outputBlobClient.GetContainerReference("pre-agora");
+            CloudBlobContainer outputContainer = outputBlobClient.GetContainerReference("download");
 
             CloudBlobClient inputBlobClient = inputStorageAccount.CreateCloudBlobClient();
-            CloudBlobContainer inputContainer = inputBlobClient.GetContainerReference("upload-agora");
+            CloudBlobContainer inputContainer = inputBlobClient.GetContainerReference("vod-upload");
 
-            var blobs = await ListBlobsAsync(inputContainer);
-            var shortName = inputFileName.Replace(".m3u8", "");
-            var selectedBlobs = blobs.Cast<CloudBlockBlob>().Where(a=>a.Name.Contains(shortName)).Select(a=>a.Name).ToList();
+
+            var folder = context.FunctionDirectory;
+            var tempFolder = Path.GetTempPath();
+
+            string pathLocalInput = System.IO.Path.Combine(tempFolder, inputFileName);
+
+            string outputFileName = shortName + "_download.mp4";
+            string pathLocalOutput = System.IO.Path.Combine(tempFolder, outputFileName);
 
             try
             {
-                var folder = context.FunctionDirectory;
-                var tempFolder = Path.GetTempPath();
-
-                string pathLocalInput = System.IO.Path.Combine(tempFolder, inputFileName);
-
-                string outputFileName = Guid.NewGuid().ToString()+".mp4";
-                string pathLocalOutput = System.IO.Path.Combine(tempFolder, outputFileName);
+             
 
                 foreach (DriveInfo drive in DriveInfo.GetDrives().Where(d => d.IsReady))
                 {
                     log.LogInformation($"{drive.Name}: {drive.TotalFreeSpace / 1024 / 1024} MB");
                 }
 
-                foreach (var name in selectedBlobs) {
-                    string localPath = System.IO.Path.Combine(tempFolder, name);
-
-                    /* Downloads the original video file from blob to local storage. */
-                    log.LogInformation("Dowloading source files from blob to local");
-                    using (FileStream fs = System.IO.File.Create(localPath))
-                    {
-                        try
-                        {
-                            var readBlob = inputContainer.GetBlockBlobReference(name);
-                            await readBlob.DownloadToStreamAsync(fs);
-                            log.LogInformation("Downloaded input file from blob" + name);
-                        }
-                        catch (Exception ex)
-                        {
-                            log.LogError("There was a problem downloading input file from blob. " + ex.ToString());
-                        }
-                    }
-                }
+                log.LogInformation("Downloading...");
+                var blockBlob = inputContainer.GetBlockBlobReference(inputFileName);
+                await blockBlob.DownloadToFileAsync(pathLocalInput, FileMode.OpenOrCreate);
 
                 log.LogInformation("Encoding...");
-
-                string ffmepegpath = System.IO.Path.Combine(tempFolder, "ffmpeg.exe");
-                log.LogInformation($"ffmeg Exists: {File.Exists(ffmepegpath)}");
-
-                if (!File.Exists(ffmepegpath)) { 
-                var net = new System.Net.WebClient();
-                WebClient wc = new WebClient();
-                wc.DownloadFile(new Uri("https://www.dropbox.com/s/3nt5ymir27hcs68/ffmpeg.exe?dl=0"), ffmepegpath);
-
-                }
+                var file = System.IO.Path.Combine(folder, "..\\ffmpeg\\ffmpeg.exe");
+                var fileLogo = System.IO.Path.Combine(folder, "..\\ffmpeg\\logowhite.png");
 
                 System.Diagnostics.Process process = new System.Diagnostics.Process();
                 process.StartInfo.WorkingDirectory = tempFolder;
-                process.StartInfo.FileName = ffmepegpath;
-
-                log.LogInformation($"ffmeg Exists: {File.Exists(ffmepegpath)}");
+                process.StartInfo.FileName = file;
 
                 log.LogInformation($"Temp In Exists: {File.Exists(pathLocalInput)}");
 
 
-                process.StartInfo.Arguments = ("-i {input} -acodec copy -bsf:a aac_adtstoasc -vcodec copy {output}")
+                process.StartInfo.Arguments = ("-y -i {input} -i {logoinput} -filter_complex \"overlay=x=main_w*0.01:y=main_h*0.01\" {output}")
+                    .Replace("{input}", "\"" + pathLocalInput + "\"")
+                    .Replace("{output}", "\"" + pathLocalOutput + "\"")
+                    .Replace("{logoinput}", "\"" + fileLogo + "\"")
+                    .Replace("'", "\"");
+
+                log.LogInformation(process.StartInfo.Arguments);
+                process.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
+                process.StartInfo.CreateNoWindow = true;
+                process.StartInfo.UseShellExecute = false;
+                process.StartInfo.RedirectStandardOutput = true;
+                process.StartInfo.RedirectStandardError = true;
+                var sb = new StringBuilder();
+                process.OutputDataReceived += new DataReceivedEventHandler(
+                    (s, e) =>
+                    {
+                        log.LogInformation("O: " + e.Data);
+                    }
+                );
+                process.ErrorDataReceived += (s, a) => sb.AppendLine(a.Data);
+                process.EnableRaisingEvents = true;
+
+                //start process
+                process.Start();
+                log.LogInformation("process started");
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+                process.WaitForExit();
+                if (process.ExitCode != 0)
+                {
+                    log.LogInformation(sb.ToString());
+                    throw new InvalidOperationException($"Ffmpeg failed with exit code {process.ExitCode}");
+                }
+
+                exitCode = process.ExitCode;
+                ffmpegResult = output;
+
+
+                log.LogInformation("Video Converted");
+
+                /* Uploads the encoded video file from local to blob. */
+                log.LogInformation("Uploading encoded file to blob");
+
+                log.LogInformation($"Temp Out Exists: {File.Exists(pathLocalOutput)}");
+
+                using (FileStream fs = System.IO.File.OpenRead(pathLocalOutput))
+                {
+                    try
+                    {
+                        var writeBlob = outputContainer.GetBlockBlobReference(outputFileName);
+                        await writeBlob.UploadFromStreamAsync(fs);
+                        log.LogInformation("Uploaded encoded file to blob");
+                    }
+                    catch (Exception ex)
+                    {
+                        log.LogInformation("There was a problem uploading converted file to blob. " + ex.ToString());
+                    }
+                }
+
+                var files = Directory.GetFiles(tempFolder, "*.*", SearchOption.AllDirectories);
+                foreach (var fll in files)
+                {
+                    if (File.Exists(fll))
+                    {
+                        File.Delete(fll);
+                    }
+                }
+
+                if (File.Exists(pathLocalInput))
+                {
+                    File.Delete(pathLocalInput);
+                }
+
+                if (File.Exists(pathLocalOutput))
+                {
+                    File.Delete(pathLocalOutput);
+                }
+
+            }
+            catch (Exception e)
+            {
+                isSuccessful = false;
+                errorText += e.Message;
+            }
+
+            if (exitCode != 0)
+            {
+                isSuccessful = false;
+            }
+
+            var response = new JObject
+            {
+                {"isSuccessful", isSuccessful},
+                {"ffmpegResult",  ffmpegResult},
+                {"errorText", errorText }
+            };
+
+            return new OkObjectResult(
+                response
+            );
+        }
+
+        [FunctionName("ffmpeg-encoding-podcast")]
+        public static async Task<IActionResult> EncodePodcast(
+          [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)]
+            HttpRequest req, ILogger log, ExecutionContext context)
+        {
+            string output = string.Empty;
+            bool isSuccessful = true;
+            dynamic ffmpegResult = new JObject();
+            string errorText = string.Empty;
+            int exitCode = 0;
+
+            log.LogInformation("C# HTTP trigger function processed a request.");
+
+            dynamic data;
+            try
+            {
+                data = JsonConvert.DeserializeObject(new StreamReader(req.Body).ReadToEnd());
+            }
+            catch (Exception ex)
+            {
+                return Helpers.Helpers.ReturnErrorException(log, ex);
+            }
+
+            var inputFileName = (string)data.inputFileName;
+            var storageAccount = (string)data.storageAccount;
+            var storageKey = (string)data.storageKey;
+            var outputAccount = (string)data.outputAccount;
+            var outputKey = (string)data.outputKey;
+            var shortName = inputFileName.Replace(".mp4", "");
+
+            StorageCredentials inpoutStorageCredentials = new StorageCredentials(storageAccount, storageKey);
+            CloudStorageAccount inputStorageAccount = new CloudStorageAccount(inpoutStorageCredentials, useHttps: true);
+
+            StorageCredentials outputStorageCredentials = new StorageCredentials(outputAccount, outputKey);
+            CloudStorageAccount outputStorageAccount = new CloudStorageAccount(outputStorageCredentials, useHttps: true);
+
+            CloudBlobClient outputBlobClient = outputStorageAccount.CreateCloudBlobClient();
+            CloudBlobContainer outputContainer = outputBlobClient.GetContainerReference("podcast");
+
+            CloudBlobClient inputBlobClient = inputStorageAccount.CreateCloudBlobClient();
+            CloudBlobContainer inputContainer = inputBlobClient.GetContainerReference("vod-upload");
+
+
+            var folder = context.FunctionDirectory;
+            var tempFolder = Path.GetTempPath();
+
+            string pathLocalInput = System.IO.Path.Combine(tempFolder, inputFileName);
+
+            string outputFileName = shortName + "_podcast.mp3";
+            string pathLocalOutput = System.IO.Path.Combine(tempFolder, outputFileName);
+
+            try
+            {
+
+
+                foreach (DriveInfo drive in DriveInfo.GetDrives().Where(d => d.IsReady))
+                {
+                    log.LogInformation($"{drive.Name}: {drive.TotalFreeSpace / 1024 / 1024} MB");
+                }
+
+                log.LogInformation("Downloading...");
+                var blockBlob = inputContainer.GetBlockBlobReference(inputFileName);
+                await blockBlob.DownloadToFileAsync(pathLocalInput, FileMode.OpenOrCreate);
+
+                log.LogInformation("Encoding...");
+                var file = System.IO.Path.Combine(folder, "..\\ffmpeg\\ffmpeg.exe");
+
+                System.Diagnostics.Process process = new System.Diagnostics.Process();
+                process.StartInfo.WorkingDirectory = tempFolder;
+                process.StartInfo.FileName = file;
+
+                log.LogInformation($"Temp In Exists: {File.Exists(pathLocalInput)}");
+
+
+                process.StartInfo.Arguments = ("-i {input} -b:a 192K -vn {output}")
                     .Replace("{input}", "\"" + pathLocalInput + "\"")
                     .Replace("{output}", "\"" + pathLocalOutput + "\"")
                     .Replace("'", "\"");
@@ -230,7 +536,15 @@ namespace Encoding
                     }
                 }
 
-                System.IO.File.Delete(pathLocalOutput);
+                if (File.Exists(pathLocalInput))
+                {
+                    File.Delete(pathLocalInput);
+                }
+
+                if (File.Exists(pathLocalOutput))
+                {
+                    File.Delete(pathLocalOutput);
+                }
             }
             catch (Exception e)
             {
@@ -248,12 +562,12 @@ namespace Encoding
                 {"isSuccessful", isSuccessful},
                 {"ffmpegResult",  ffmpegResult},
                 {"errorText", errorText }
-
             };
 
             return new OkObjectResult(
                 response
             );
         }
+
     }
 }
